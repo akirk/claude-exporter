@@ -118,6 +118,12 @@
   - Click the org ID row in the browse settings dropdown to copy it
   - Toast confirms "Org ID copied to clipboard"
 
+- **Vitest unit tests for `utils.js`** (post-v1.9.1)
+  - 17 starter tests covering the recently-fixed bugs and core export logic
+  - Regression coverage for `tool_use.name === 'artifacts'` filter, branch traversal, file extension mapping
+  - `npm test` from `src/`; tests live in `src/tests/`
+  - Canonical source is `chrome/utils.js`; `firefox/utils.js` mirror must stay in sync
+
 ## Pending 🔄
 
 ### Critical Priority 🔴
@@ -202,10 +208,11 @@
   - Filter by project, model, artifact
 
 - **Advanced settings menu**
-  - *Language settings*
-  - *Custom CSS*
-  - *Regex mode*
-  - *Custom date/time format*
+  - Verbosity toggle & Debug log
+  - Language settings
+  - Custom CSS
+  - Regex mode
+  - Custom date/time format
     - Custom format string (e.g. `%d/%m/%Y %H:%M`)
     - Toggle time display on/off
 
@@ -233,13 +240,18 @@
   - Option to use regex patterns in the search bar
   - Toggle between plain text and regex mode
 
-- **Help / tutorial in settings menu** (low priority)
+- **Help / tutorial in settings menu**
   - Add a help/getting started option to the settings dropdown
   - Quick overview of features, export options, keyboard shortcuts
 
 - **Minor UI improvements**
   - Export progress spinner
   - Test connection spinner
+
+- **Update screenshots**
+  - Include browse page and popup
+  - Include dark and light mode
+  - 1280x800 or 640x400 jpeg or 24-bit png (no alpha)
 
 ## Bugs 🐛
 

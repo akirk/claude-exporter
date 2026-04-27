@@ -91,6 +91,14 @@ Any export producing more than one file should always create a ZIP — never tri
 
 When merging `testing` → `main` for a release, flip both manifest names to drop "Beta" as part of the merge.
 
+## Testing
+
+- **Vitest** lives in `src/`. Run tests with `npm test` (one-shot) or `npm run test:watch` (watch mode) from `src/`.
+- Test files live in `src/tests/` and import from `src/chrome/utils.js` (the canonical copy).
+- `firefox/utils.js` is a mirror — if it drifts from `chrome/utils.js`, the tests won't catch it. Keep them in sync per the existing rule.
+- `utils.js` has a conditional `module.exports` block at the bottom that fires only when `module` is defined (Node/vitest). Browser extensions ignore it because the global is undefined.
+- `node_modules/` and `package-lock.json` live under `src/` and are gitignored / not part of the release ZIPs.
+
 ## Architecture Notes
 
 ### Content Script Injection

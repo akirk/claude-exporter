@@ -581,4 +581,19 @@ function extractArtifactFiles(data, artifactFormat = 'original') {
   return artifactFiles;
 }
 // Functions are available globally in the browser context
-// No need for module.exports in browser extensions
+// In Node (vitest), expose them via module.exports for testing
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    getCurrentBranch,
+    convertToMarkdown,
+    convertToText,
+    downloadFile,
+    extractArtifactsFromMessage,
+    extractArtifactsFromText,
+    extractArtifacts,
+    getFileExtension,
+    isProgrammingLanguage,
+    convertArtifactFormat,
+    extractArtifactFiles,
+  };
+}
