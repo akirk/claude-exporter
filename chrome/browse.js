@@ -651,6 +651,30 @@ async function exportConversation(conversationId, conversationName) {
     // Infer model if null
     data.model = inferModel(data);
 
+    // EPUB: generate single-chapter ebook
+    if (format === 'epub') {
+      if (includeChats === false) {
+        showToast('Enable "Chats" for EPUB export.', true);
+        return;
+      }
+      const chapterXhtml = convertToEpubChapter(data, includeMetadata, conversationId, includeArtifacts, includeThinking);
+      const epubZip = generateEpub([{ title: conversationName || conversationId, xhtml: chapterXhtml }], conversationName || 'Claude Conversation');
+      const epubBlob = await epubZip.generateAsync({ type: 'blob' });
+      const epubUrl = URL.createObjectURL(epubBlob);
+      const epubLink = document.createElement('a');
+      epubLink.href = epubUrl;
+      epubLink.download = `${conversationName || conversationId}.epub`;
+      document.body.appendChild(epubLink);
+      epubLink.click();
+      document.body.removeChild(epubLink);
+      URL.revokeObjectURL(epubUrl);
+      await saveExportTimestamp(conversationId);
+      showToast(`Exported: ${conversationName}`);
+      displayConversations();
+      updateStats();
+      return;
+    }
+
     // Check if we need to extract artifacts to separate files
     if (extractArtifacts || flattenArtifacts) {
       const artifactFiles = extractArtifactFiles(data, artifactFormat);
@@ -848,6 +872,7 @@ async function exportAllFiltered() {
   try {
     // Create a new ZIP file
     const zip = new JSZip();
+    const epubChapters = [];
     const total = conversationsToExport.length;
     let completed = 0;
     let failed = 0;
@@ -881,6 +906,17 @@ async function exportAllFiltered() {
 
           // Infer model if null
           data.model = inferModel(data);
+
+          // EPUB: collect chapter and skip zip
+          if (format === 'epub') {
+            if (includeChats !== false) {
+              const safeName = conv.name.replace(/[<>:"/\\|?*]/g, '_');
+              const chapterXhtml = convertToEpubChapter(data, includeMetadata, conv.uuid, includeArtifacts, includeThinking);
+              epubChapters.push({ title: safeName, xhtml: chapterXhtml });
+            }
+            completed++;
+            return;
+          }
 
           // Extract artifacts first to check if this conversation should be included
           const artifactFiles = extractArtifactFiles(data, artifactFormat);
@@ -975,29 +1011,41 @@ async function exportAllFiltered() {
     
     if (cancelExport) return;
 
-    // Generate and download the ZIP file
-    progressText.textContent = 'Creating ZIP file...';
-    const blob = await zip.generateAsync({
-      type: 'blob',
-      compression: 'DEFLATE',
-      compressionOptions: {
-        level: 6 // Medium compression
-      }
-    }, (metadata) => {
-      // Update progress during ZIP creation
-      const zipProgress = Math.round(metadata.percent);
-      progressBar.style.width = `${zipProgress}%`;
-    });
-    
-    // Download the ZIP file
+    // Generate and download the file
+    let blob;
+    if (format === 'epub') {
+      progressText.textContent = 'Creating EPUB file...';
+      const epubZip = generateEpub(epubChapters, 'Claude Conversations Export');
+      blob = await epubZip.generateAsync({
+        type: 'blob',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 6 }
+      }, (metadata) => {
+        progressBar.style.width = `${Math.round(metadata.percent)}%`;
+      });
+    } else {
+      progressText.textContent = 'Creating ZIP file...';
+      blob = await zip.generateAsync({
+        type: 'blob',
+        compression: 'DEFLATE',
+        compressionOptions: {
+          level: 6
+        }
+      }, (metadata) => {
+        const zipProgress = Math.round(metadata.percent);
+        progressBar.style.width = `${zipProgress}%`;
+      });
+    }
+
+    // Download the file
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    // Format: claude-artifacts-20251031-143045.zip or claude-exports-20251031-143045.zip
     const datetime = getLocalDateTimeString();
-    // Use 'claude-artifacts' when ONLY flat artifacts are exported
-    const prefix = (flattenArtifacts && !extractArtifacts && includeChats === false) ? 'claude-artifacts' : 'claude-exports';
-    a.download = `${prefix}-${datetime}.zip`;
+    const downloadFilename = format === 'epub'
+      ? `claude-exports-${datetime}.epub`
+      : `${(flattenArtifacts && !extractArtifacts && includeChats === false) ? 'claude-artifacts' : 'claude-exports'}-${datetime}.zip`;
+    a.download = downloadFilename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

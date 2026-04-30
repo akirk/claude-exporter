@@ -173,7 +173,30 @@ function getLocalDateTimeString() {
 
         // Infer model if null
         data.model = inferModel(data);
-        
+
+        // EPUB: single-chapter ebook
+        if (request.format === 'epub') {
+          if (request.includeChats === false) {
+            sendResponse({ success: false, error: 'Enable "Chats" for EPUB export.' });
+            return;
+          }
+          const chapterXhtml = convertToEpubChapter(data, request.includeMetadata, request.conversationId, request.includeArtifacts, request.includeThinking);
+          const epubZip = generateEpub([{ title: data.name || request.conversationId, xhtml: chapterXhtml }], data.name || 'Claude Conversation');
+          epubZip.generateAsync({ type: 'blob' }).then(blob => {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${data.name || request.conversationId}.epub`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+          });
+          recordExportTimestamp(request.conversationId);
+          sendResponse({ success: true });
+          return;
+        }
+
         // Check if we need to extract artifacts to separate files
         if (request.extractArtifacts || request.flattenArtifacts) {
           // Extract artifacts
@@ -320,7 +343,55 @@ function getLocalDateTimeString() {
     fetchAllConversations(request.orgId)
       .then(async conversations => {
         console.log(`Fetched ${conversations.length} conversations`);
-        
+
+        if (request.format === 'epub') {
+          const epubChapters = [];
+          let count = 0;
+          const errors = [];
+
+          for (const conv of conversations) {
+            try {
+              const fullConv = await fetchConversation(request.orgId, conv.uuid);
+              fullConv.model = inferModel(fullConv);
+              if (request.includeChats !== false) {
+                const safeName = (conv.name || conv.uuid).replace(/[<>:"/\\|?*]/g, '_');
+                const chapterXhtml = convertToEpubChapter(fullConv, request.includeMetadata, conv.uuid, request.includeArtifacts, request.includeThinking);
+                epubChapters.push({ title: safeName, xhtml: chapterXhtml });
+              }
+              count++;
+              await new Promise(resolve => setTimeout(resolve, 500));
+            } catch (error) {
+              console.error(`Failed to export conversation ${conv.uuid}:`, error);
+              errors.push(`${conv.name || conv.uuid}: ${error.message}`);
+            }
+          }
+
+          if (epubChapters.length > 0) {
+            const epubZip = generateEpub(epubChapters, 'Claude Conversations Export');
+            epubZip.generateAsync({ type: 'blob' }).then(blob => {
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              const datetime = getLocalDateTimeString();
+              link.download = `claude-exports-${datetime}.epub`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              URL.revokeObjectURL(url);
+            });
+          }
+
+          const exportedIds = conversations.map(c => c.uuid).filter(id => !errors.some(e => e.includes(id)));
+          recordExportTimestamps(exportedIds);
+
+          if (errors.length > 0) {
+            sendResponse({ success: true, count, warnings: `Exported ${count}/${conversations.length} conversations. Some failed: ${errors.join('; ')}` });
+          } else {
+            sendResponse({ success: true, count });
+          }
+          return;
+        }
+
         if (request.extractArtifacts || request.flattenArtifacts) {
           // When extracting artifacts (nested or flat), always create a ZIP
           const zip = new JSZip();

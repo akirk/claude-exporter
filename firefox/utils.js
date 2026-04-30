@@ -749,6 +749,340 @@ function restoreExtensionData(file, onComplete) {
   reader.readAsText(file);
 }
 
+// ============================================================================
+// EPUB Generation Functions
+// ============================================================================
+
+function escapeXml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function inlineMarkdownToXhtml(text) {
+  const codeParts = [];
+  text = text.replace(/`([^`]+)`/g, (_, code) => {
+    const idx = codeParts.length;
+    codeParts.push(`<code>${escapeXml(code)}</code>`);
+    return `\x00CODE${idx}\x00`;
+  });
+  text = escapeXml(text);
+  text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  text = text.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+  text = text.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+  text = text.replace(/_([^_\n]+)_/g, '<em>$1</em>');
+  text = text.replace(/~~([^~\n]+)~~/g, '<del>$1</del>');
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+  text = text.replace(/\x00CODE(\d+)\x00/g, (_, idx) => codeParts[parseInt(idx)]);
+  return text;
+}
+
+function textToXhtml(text) {
+  if (!text || !text.trim()) return '';
+  let html = '';
+  const blocks = text.split(/\n\n+/);
+  for (const block of blocks) {
+    const trimmed = block.trim();
+    if (!trimmed) continue;
+
+    const headingMatch = trimmed.match(/^(#{1,4}) (.+)/);
+    if (headingMatch) {
+      const level = Math.min(headingMatch[1].length + 1, 6);
+      html += `<h${level}>${inlineMarkdownToXhtml(headingMatch[2])}</h${level}>\n`;
+      continue;
+    }
+
+    if (/^(---+|\*\*\*+|___+)$/.test(trimmed)) {
+      html += '<hr/>\n';
+      continue;
+    }
+
+    if (/^[-*+] /.test(trimmed)) {
+      const lines = trimmed.split('\n');
+      html += '<ul>\n';
+      for (const line of lines) {
+        const m = line.match(/^[-*+] (.+)/);
+        if (m) html += `<li>${inlineMarkdownToXhtml(m[1])}</li>\n`;
+      }
+      html += '</ul>\n';
+      continue;
+    }
+
+    if (/^\d+\. /.test(trimmed)) {
+      const lines = trimmed.split('\n');
+      html += '<ol>\n';
+      for (const line of lines) {
+        const m = line.match(/^\d+\. (.+)/);
+        if (m) html += `<li>${inlineMarkdownToXhtml(m[1])}</li>\n`;
+      }
+      html += '</ol>\n';
+      continue;
+    }
+
+    if (/^> /.test(trimmed)) {
+      const content = trimmed.replace(/^> /gm, '');
+      html += `<blockquote><p>${inlineMarkdownToXhtml(content)}</p></blockquote>\n`;
+      continue;
+    }
+
+    const lines = trimmed.split('\n');
+    html += `<p>${lines.map(l => inlineMarkdownToXhtml(l)).join('<br/>\n')}</p>\n`;
+  }
+  return html;
+}
+
+// Split text on fenced code blocks and convert each part to XHTML
+function markdownToXhtml(text) {
+  if (!text) return '';
+  // Split into alternating [non-code, code-block, non-code, code-block, ...]
+  const segments = text.split(/(```\w*[^\n]*\n[\s\S]*?```)/g);
+  let html = '';
+  for (const segment of segments) {
+    const codeMatch = segment.match(/^```(\w*)[^\n]*\n([\s\S]*)```$/);
+    if (codeMatch) {
+      const langAttr = codeMatch[1] ? ` class="language-${escapeXml(codeMatch[1])}"` : '';
+      html += `<pre><code${langAttr}>${escapeXml(codeMatch[2].trimEnd())}</code></pre>\n`;
+    } else if (segment) {
+      html += textToXhtml(segment);
+    }
+  }
+  return html;
+}
+
+function convertToEpubChapter(data, includeMetadata, conversationId, includeArtifacts, includeThinking) {
+  let html = '';
+
+  if (includeMetadata) {
+    html += '<div class="metadata">\n';
+    html += `<p><strong>Created:</strong> ${escapeXml(new Date(data.created_at).toLocaleString())}</p>\n`;
+    html += `<p><strong>Updated:</strong> ${escapeXml(new Date(data.updated_at).toLocaleString())}</p>\n`;
+    html += `<p><strong>Exported:</strong> ${escapeXml(new Date().toLocaleString())}</p>\n`;
+    html += `<p><strong>Model:</strong> ${escapeXml(data.model || 'Unknown')}</p>\n`;
+    if (conversationId) {
+      html += `<p><strong>Link:</strong> <a href="https://claude.ai/chat/${escapeXml(conversationId)}">https://claude.ai/chat/${escapeXml(conversationId)}</a></p>\n`;
+    }
+    html += '</div>\n<hr/>\n';
+  }
+
+  const branchMessages = getCurrentBranch(data);
+
+  for (const message of branchMessages) {
+    const isHuman = message.sender === 'human';
+    const roleClass = isHuman ? 'human' : 'assistant';
+    const roleLabel = isHuman ? 'User' : 'Claude';
+
+    html += `<div class="message ${roleClass}">\n`;
+    html += `<p class="role">${roleLabel}</p>\n`;
+
+    if (includeMetadata && message.created_at) {
+      html += `<p class="timestamp"><em>${escapeXml(new Date(message.created_at).toISOString())}</em></p>\n`;
+    }
+
+    const messageArtifacts = includeArtifacts ? extractArtifactsFromMessage(message) : [];
+
+    if (message.content) {
+      for (const content of message.content) {
+        if (content.type === 'thinking' && content.thinking && includeThinking) {
+          html += `<div class="thinking">\n<p class="thinking-label">Thinking</p>\n<pre>${escapeXml(content.thinking)}</pre>\n</div>\n`;
+        } else if (content.type === 'text' && content.text) {
+          const textContent = content.text.replace(/<antArtifact[^>]*>[\s\S]*?<\/antArtifact>/g, '').trim();
+          if (textContent) html += markdownToXhtml(textContent);
+        }
+      }
+    } else if (message.text) {
+      const textContent = message.text.replace(/<antArtifact[^>]*>[\s\S]*?<\/antArtifact>/g, '').trim();
+      if (textContent) html += markdownToXhtml(textContent);
+    }
+
+    if (message.attachments && message.attachments.length > 0) {
+      for (const attachment of message.attachments) {
+        if (attachment.extracted_content) {
+          html += `<div class="attachment">\n<p class="attachment-label">Pasted content</p>\n<pre>${escapeXml(attachment.extracted_content)}</pre>\n</div>\n`;
+        }
+      }
+    }
+
+    for (const artifact of messageArtifacts) {
+      html += '<div class="artifact">\n';
+      html += `<div class="artifact-header">Artifact: ${escapeXml(artifact.title)} (${escapeXml(artifact.language)})</div>\n`;
+      if (artifact.type === 'code' || isProgrammingLanguage(artifact.language)) {
+        html += `<pre><code class="language-${escapeXml(artifact.language)}">${escapeXml(artifact.content)}</code></pre>\n`;
+      } else {
+        html += markdownToXhtml(artifact.content);
+      }
+      html += '</div>\n';
+    }
+
+    html += '</div>\n';
+  }
+
+  return html;
+}
+
+function generateEpub(chapters, bookTitle) {
+  const zip = new JSZip();
+  const bookId = `claude-export-${Date.now()}`;
+  const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+
+  zip.file('mimetype', 'application/epub+zip', { compression: 'STORE' });
+
+  const metaInf = zip.folder('META-INF');
+  metaInf.file('container.xml', [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">',
+    '  <rootfiles>',
+    '    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>',
+    '  </rootfiles>',
+    '</container>'
+  ].join('\n'));
+
+  const oebps = zip.folder('OEBPS');
+  oebps.file('styles.css', getEpubStyles());
+
+  const chapterIds = chapters.map((_, i) => `ch${String(i + 1).padStart(3, '0')}`);
+
+  for (let i = 0; i < chapters.length; i++) {
+    const id = chapterIds[i];
+    const ch = chapters[i];
+    oebps.file(`${id}.xhtml`, [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<!DOCTYPE html>',
+      '<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="en">',
+      '<head>',
+      `  <title>${escapeXml(ch.title)}</title>`,
+      '  <link rel="stylesheet" type="text/css" href="styles.css"/>',
+      '</head>',
+      '<body>',
+      `<h1>${escapeXml(ch.title)}</h1>`,
+      ch.xhtml,
+      '</body>',
+      '</html>'
+    ].join('\n'));
+  }
+
+  const tocItems = chapters.map((ch, i) =>
+    `      <li><a href="${chapterIds[i]}.xhtml">${escapeXml(ch.title)}</a></li>`
+  ).join('\n');
+
+  oebps.file('nav.xhtml', [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<!DOCTYPE html>',
+    '<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="en">',
+    '<head><title>Table of Contents</title><link rel="stylesheet" type="text/css" href="styles.css"/></head>',
+    '<body>',
+    '  <nav epub:type="toc" id="toc">',
+    `    <h1>${escapeXml(bookTitle)}</h1>`,
+    '    <ol>',
+    tocItems,
+    '    </ol>',
+    '  </nav>',
+    '</body>',
+    '</html>'
+  ].join('\n'));
+
+  const navPoints = chapters.map((ch, i) => [
+    `    <navPoint id="${chapterIds[i]}" playOrder="${i + 1}">`,
+    `      <navLabel><text>${escapeXml(ch.title)}</text></navLabel>`,
+    `      <content src="${chapterIds[i]}.xhtml"/>`,
+    `    </navPoint>`
+  ].join('\n')).join('\n');
+
+  oebps.file('toc.ncx', [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">',
+    '  <head>',
+    `    <meta name="dtb:uid" content="${escapeXml(bookId)}"/>`,
+    '    <meta name="dtb:depth" content="1"/>',
+    '    <meta name="dtb:totalPageCount" content="0"/>',
+    '    <meta name="dtb:maxPageNumber" content="0"/>',
+    '  </head>',
+    `  <docTitle><text>${escapeXml(bookTitle)}</text></docTitle>`,
+    '  <navMap>',
+    navPoints,
+    '  </navMap>',
+    '</ncx>'
+  ].join('\n'));
+
+  const manifestItems = [
+    '    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>',
+    '    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>',
+    '    <item id="css" href="styles.css" media-type="text/css"/>',
+    ...chapters.map((_, i) => `    <item id="${chapterIds[i]}" href="${chapterIds[i]}.xhtml" media-type="application/xhtml+xml"/>`)
+  ].join('\n');
+
+  const spineItems = [
+    '    <itemref idref="nav"/>',
+    ...chapters.map((_, i) => `    <itemref idref="${chapterIds[i]}"/>`)
+  ].join('\n');
+
+  oebps.file('content.opf', [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<package version="3.0" xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId" xml:lang="en">',
+    '  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">',
+    `    <dc:title>${escapeXml(bookTitle)}</dc:title>`,
+    '    <dc:creator>Claude Exporter</dc:creator>',
+    `    <dc:identifier id="BookId">${escapeXml(bookId)}</dc:identifier>`,
+    '    <dc:language>en</dc:language>',
+    `    <meta property="dcterms:modified">${now}</meta>`,
+    '  </metadata>',
+    '  <manifest>',
+    manifestItems,
+    '  </manifest>',
+    '  <spine toc="ncx">',
+    spineItems,
+    '  </spine>',
+    '</package>'
+  ].join('\n'));
+
+  return zip;
+}
+
+function getEpubStyles() {
+  return `body {
+  font-family: Georgia, serif;
+  margin: 5%;
+  line-height: 1.6;
+  color: #2c313a;
+}
+h1 { font-size: 1.6em; border-bottom: 2px solid #5d44e8; padding-bottom: 0.3em; margin-bottom: 1em; color: #333; }
+h2 { font-size: 1.3em; color: #444; margin-top: 1.5em; }
+h3 { font-size: 1.1em; color: #555; }
+h4, h5, h6 { font-size: 1em; color: #666; }
+p { margin: 0.8em 0; }
+a { color: #5d44e8; }
+.metadata { margin-bottom: 1.5em; font-size: 0.9em; }
+.metadata p { margin: 0.25em 0; }
+hr { border: none; margin: 1.5em 0; }
+.message { margin: 1.4em 0; }
+.role { font-weight: bold; font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.08em; color: #888; margin: 0 0 0.4em 0; }
+.timestamp { font-size: 0.75em; color: #aaa; margin: 0 0 0.4em 0; }
+pre { color: #2c313a; padding: 0.6em 0; overflow-x: auto; white-space: pre-wrap; word-break: break-all; font-size: 0.82em; font-family: monospace; }
+code { color: #2c313a; font-size: 0.85em; font-family: monospace; }
+pre code { color: inherit; padding: 0; }
+blockquote { margin: 1em 0; padding: 0 1em; color: #666; }
+ul, ol { padding-left: 1.5em; margin: 0.5em 0; }
+li { margin: 0.2em 0; }
+strong { font-weight: bold; }
+em { font-style: italic; }
+del { text-decoration: line-through; color: #999; }
+.artifact { margin: 1em 0; }
+.artifact-header { font-size: 0.82em; font-weight: bold; color: #5d44e8; margin-bottom: 0.4em; }
+.artifact pre { margin: 0; }
+.thinking { margin: 0.8em 0; }
+.thinking-label { font-weight: bold; font-size: 0.75em; color: #886600; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.4em 0; }
+.thinking pre { font-size: 0.8em; }
+.attachment { margin: 1em 0; }
+.attachment-label { font-size: 0.82em; color: #666; margin-bottom: 0.3em; }
+.attachment pre { margin: 0; }
+nav ol { padding-left: 1.5em; }
+nav li { margin: 0.4em 0; }
+nav a { color: #5d44e8; text-decoration: none; }`;
+}
+
 // Functions are available globally in the browser context
 // In Node (vitest), expose them via module.exports for testing
 if (typeof module !== 'undefined' && module.exports) {
@@ -770,5 +1104,12 @@ if (typeof module !== 'undefined' && module.exports) {
     getModelBadgeClass,
     backupExtensionData,
     restoreExtensionData,
+    escapeXml,
+    inlineMarkdownToXhtml,
+    textToXhtml,
+    markdownToXhtml,
+    convertToEpubChapter,
+    generateEpub,
+    getEpubStyles,
   };
 }

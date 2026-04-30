@@ -304,3 +304,7 @@
   - Markdown export now includes the `truncated` flag and per-message attachment info (`file_name`, `file_size`, `file_type`) — parity with what JSON export already provided
   - File attachments render as `### Attachment: name _(size, type)_`; pasted content (no `file_name`) keeps the legacy `### Pasted` label
   - Adopted from upstream commit `318d4a7`; skipped the extension-rename-to-"Local" half (we use the "Beta" suffix convention for testing builds)
+
+- **EPUB export format** (v1.9.9)
+  - Added EPUB as an export format in the popup and browse page
+  - Single-conversation export creates a one-chapter ebook; bulk export creates one ebook with each conversation as a chapter

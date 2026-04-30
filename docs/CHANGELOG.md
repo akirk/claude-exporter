@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.9.9]
+
+- Added EPUB export format for single and bulk conversation exports, with one chapter per conversation in bulk exports
+
 ## [1.9.8]
 
 - Markdown export now includes the `truncated` flag in the metadata block (when present in the conversation data)
