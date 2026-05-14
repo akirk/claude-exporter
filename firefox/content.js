@@ -35,6 +35,43 @@ function recordExportTimestamps(conversationIds) {
   });
 }
 
+// Snapshot each conversation's current model so it survives a model bounce
+// (e.g. when a model retires and Claude silently moves old chats onto a new
+// one). Only the raw API model is recorded — never an inferred guess.
+function recordModelSnapshots(conversations) {
+  if (!Array.isArray(conversations)) return;
+  chrome.storage.local.get(['modelSnapshots'], (result) => {
+    const snapshots = result.modelSnapshots || {};
+    const now = new Date().toISOString();
+    let changed = false;
+    for (const conv of conversations) {
+      const model = conv && conv.model;
+      const id = conv && conv.uuid;
+      if (!model || !id) continue; // skip null-model chats — don't snapshot a guess
+      const existing = snapshots[id];
+      if (!existing) {
+        snapshots[id] = {
+          firstSeen: model,
+          firstSeenAt: now,
+          current: model,
+          currentAt: now,
+          history: [{ model, at: now }]
+        };
+        changed = true;
+      } else if (existing.current !== model) {
+        existing.current = model;
+        existing.currentAt = now;
+        existing.history = existing.history || [];
+        existing.history.push({ model, at: now });
+        changed = true;
+      }
+    }
+    if (changed) {
+      chrome.storage.local.set({ modelSnapshots: snapshots });
+    }
+  });
+}
+
 // Helper function to format datetime in local time for filenames
 function getLocalDateTimeString() {
   const now = new Date();
@@ -79,8 +116,10 @@ function getLocalDateTimeString() {
     if (!response.ok) {
       throw new Error(`Failed to fetch conversations: ${response.status}`);
     }
-    
-    return await response.json();
+
+    const conversations = await response.json();
+    recordModelSnapshots(conversations); // capture current models before any bounce
+    return conversations;
   }
 
   // Handle messages from popup

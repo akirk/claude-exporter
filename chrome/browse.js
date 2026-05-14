@@ -47,6 +47,7 @@ let sortStack = []; // Track multi-level sorting: [{field: 'name', direction: 'a
 let selectedConversations = new Set(); // Track selected conversation IDs
 let lastCheckedIndex = null; // Track last checked checkbox for shift+click range selection
 let exportTimestamps = {}; // Map conversation UUID to last export timestamp
+let modelSnapshots = {}; // Map conversation UUID to { firstSeen, current, ... } captured by content.js
 let statusFilter = 'all'; // 'all', 'new', 'exported'
 let dateFormat = 'mdy'; // 'mdy' or 'dmy'
 let timeFormat = '12h'; // '12h' or '24h'
@@ -59,6 +60,33 @@ async function loadExportTimestamps() {
       resolve();
     });
   });
+}
+
+// Model snapshots are written by content.js whenever the conversation list is
+// fetched (see recordModelSnapshots). They preserve the original model even
+// after a chat is bounced to a newer one on model retirement.
+async function loadModelSnapshots() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['modelSnapshots'], (result) => {
+      modelSnapshots = result.modelSnapshots || {};
+      resolve();
+    });
+  });
+}
+
+// Resolve which model to show for a conversation: the original (first-seen)
+// snapshot if we have one, otherwise the current/inferred model. Also reports
+// whether the chat has since been bounced to a different model.
+function getDisplayModel(conv) {
+  const snap = modelSnapshots[conv.uuid];
+  if (snap && snap.firstSeen) {
+    return {
+      model: snap.firstSeen,
+      current: snap.current || snap.firstSeen,
+      bounced: !!snap.current && snap.current !== snap.firstSeen
+    };
+  }
+  return { model: conv.model, current: conv.model, bounced: false };
 }
 
 async function saveExportTimestamp(conversationId) {
@@ -114,6 +142,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const loadingStart = Date.now();
   await loadOrgId();
   await loadExportTimestamps();
+  await loadModelSnapshots();
   await loadDateTimePrefs();
   const elapsed = Date.now() - loadingStart;
   if (elapsed < 1000) await new Promise(r => setTimeout(r, 1000 - elapsed));
@@ -307,8 +336,8 @@ function sortConversations() {
           bVal = new Date(b.updated_at);
           break;
         case 'model':
-          aVal = formatModelName(a.model || '').toLowerCase();
-          bVal = formatModelName(b.model || '').toLowerCase();
+          aVal = formatModelName(getDisplayModel(a).model || '').toLowerCase();
+          bVal = formatModelName(getDisplayModel(b).model || '').toLowerCase();
           break;
         default:
           continue;
@@ -393,7 +422,8 @@ function displayConversations() {
     const updatedTime = formatTime(updatedDt);
     const createdDate = formatDate(createdDt);
     const createdTime = formatTime(createdDt);
-    const modelBadgeClass = getModelBadgeClass(conv.model);
+    const modelInfo = getDisplayModel(conv);
+    const modelBadgeClass = getModelBadgeClass(modelInfo.model);
     const projectName = getProjectName(conv);
 
     const newUpdated = isNewOrUpdated(conv);
@@ -412,8 +442,8 @@ function displayConversations() {
         <td class="date">${escapeHtml(createdDate)}<br><span class="time">${escapeHtml(createdTime)}</span></td>
         <td>
           <span class="model-badge ${modelBadgeClass}">
-            ${escapeHtml(formatModelName(conv.model))}
-          </span>
+            ${escapeHtml(formatModelName(modelInfo.model))}
+          </span>${modelInfo.bounced ? `<span class="model-bounced" title="Originally ${escapeHtml(formatModelName(modelInfo.model))}, now ${escapeHtml(formatModelName(modelInfo.current))}">→</span>` : ''}
         </td>
         <td>
           <div class="actions">
