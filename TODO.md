@@ -184,6 +184,11 @@
   - Chat name already links to conversation, "View" button may be unnecessary
   - Frees up that table cell for future artifact-indicator badges
 
+- **Revisit the "organization ID not set up" UI**
+  - Org ID is auto-detected on every export action now (v1.8.12), so the manual setup prompt/UI feels redundant
+  - ⚠️ Don't just delete it — the manually-configured org ID is still the documented *fallback* for when auto-detect fails. Removing it removes that safety net.
+  - Better framing: keep the manual override available (maybe tucked into advanced settings), but drop the upfront "not set up" prompting/empty-state since auto-detect covers the common case
+
 - **Artifact indicators in browse table**
   - Show icon next to conversation name if it contains artifacts
   - Add filter options in funnel dropdown: with artifacts / without artifacts
