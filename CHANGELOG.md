@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.9.4]
+
+- Browse table's Model column now shows each chat's original (first-seen) model from the snapshot data, falling back to the current/inferred model when no snapshot exists
+- Bounced chats (original model differs from current) get a `→` marker with a tooltip showing "Originally X, now Y"
+- Model column sorting follows the displayed (original) model
+
 ## [1.9.3]
 
 - Snapshot each conversation's current model to `chrome.storage.local` whenever the conversation list is fetched (browse page load or popup "Export All") — preserves the model before a chat gets bounced to a new one on model retirement
