@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.9.6]
+
+- Added an "Advanced Options" link to the browse page settings dropdown (between Time and Test connection) — opens the options page, making Backup & Restore reachable directly from the browse view
+
 ## [1.9.5]
 
 - Added Backup & Restore to the options page — download all extension data (model snapshots, export history, preferences) to a JSON file and restore it later

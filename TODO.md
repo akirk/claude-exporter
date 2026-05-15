@@ -132,6 +132,7 @@
   - Options page can download all `chrome.storage.local` + `chrome.storage.sync` data to a JSON file and restore it
   - Solves uninstall/reinstall data loss, and migration between separate extension builds (store vs. GitHub) which have separate storage
   - Backup file is structured `{ _meta, local, sync }`; restore validates `_meta.app` and confirms before overwriting
+  - v1.9.6: "Advanced Options" link added to the browse settings dropdown (between Time and Test connection) so the options page is reachable from the browse view
   - Future enhancement: smart per-key merge on restore (e.g. union `modelSnapshots`, keep earliest `firstSeen`) instead of overwrite
 
 ## Pending 🔄

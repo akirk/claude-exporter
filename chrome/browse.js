@@ -1142,6 +1142,12 @@ function setupEventListeners() {
     settingsDropdown.classList.remove('open');
   });
 
+  // Advanced Options — open options page
+  document.getElementById('advancedOptions').addEventListener('click', () => {
+    chrome.runtime.openOptionsPage();
+    settingsDropdown.classList.remove('open');
+  });
+
   // Mark all as exported
   document.getElementById('markAllExported').addEventListener('click', async () => {
     const ids = allConversations.map(c => c.uuid);
