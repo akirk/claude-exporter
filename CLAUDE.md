@@ -93,11 +93,11 @@ When merging `testing` → `main` for a release, flip both manifest names to dro
 
 ## Testing
 
-- **Vitest** lives in `src/`. Run tests with `npm test` (one-shot) or `npm run test:watch` (watch mode) from `src/`.
+- **Vitest** test harness (`package.json` + `node_modules/`) lives in `src/tests/`. Run tests with `npm test` (one-shot) or `npm run test:watch` (watch mode) from `src/tests/`.
 - Test files live in `src/tests/` and import from `src/chrome/utils.js` (the canonical copy).
 - `firefox/utils.js` is a mirror — if it drifts from `chrome/utils.js`, the tests won't catch it. Keep them in sync per the existing rule.
 - `utils.js` has a conditional `module.exports` block at the bottom that fires only when `module` is defined (Node/vitest). Browser extensions ignore it because the global is undefined.
-- `node_modules/` and `package-lock.json` live under `src/` and are gitignored / not part of the release ZIPs.
+- `node_modules/` and `package-lock.json` are gitignored (`package.json` is tracked under `src/tests/`). None are part of the release ZIPs.
 
 ## Architecture Notes
 
