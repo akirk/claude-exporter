@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.9.5]
+
+- Added Backup & Restore to the options page — download all extension data (model snapshots, export history, preferences) to a JSON file and restore it later
+- Survives uninstall/reinstall, and lets you move data between browsers, devices, or extension builds (e.g. store version ↔ GitHub build)
+
 ## [1.9.4]
 
 - Browse table's Model column now shows each chat's original (first-seen) model from the snapshot data, falling back to the current/inferred model when no snapshot exists

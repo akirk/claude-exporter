@@ -175,6 +175,15 @@
     <div id="testStatus" class="status"></div>
   </div>
 
+  <div class="section">
+    <h3>Backup &amp; Restore</h3>
+    <p>Save the extension's data — model snapshots, export history, and preferences — to a file you can restore later. Useful before uninstalling, or to move your data to another browser, device, or extension build.</p>
+    <button id="backupBtn" style="margin-right: 8px;">Download Backup</button>
+    <button id="restoreBtn">Restore from File</button>
+    <input type="file" id="restoreFile" accept="application/json,.json" style="display: none;">
+    <div id="backupStatus" class="status"></div>
+  </div>
+
   <script src="options.js"></script>
 </body>
 </html>

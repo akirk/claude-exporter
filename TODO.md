@@ -128,6 +128,12 @@
   - Moved `formatModelName`, `getModelBadgeClass`, `DEFAULT_MODEL_TIMELINE` out of `content.js`/`browse.js` into shared `utils.js`
   - Doc-linked the Anthropic model-ID schema in code comments
 
+- **Backup & Restore for extension data** (v1.9.5)
+  - Options page can download all `chrome.storage.local` + `chrome.storage.sync` data to a JSON file and restore it
+  - Solves uninstall/reinstall data loss, and migration between separate extension builds (store vs. GitHub) which have separate storage
+  - Backup file is structured `{ _meta, local, sync }`; restore validates `_meta.app` and confirms before overwriting
+  - Future enhancement: smart per-key merge on restore (e.g. union `modelSnapshots`, keep earliest `firstSeen`) instead of overwrite
+
 ## Pending 🔄
 
 ### Critical Priority 🔴
