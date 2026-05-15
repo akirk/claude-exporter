@@ -1,9 +1,4 @@
 # Claude Exporter - TODO List
-- **Markdown export: truncated flag + attachment metadata** (v1.9.8)
-  - Markdown export now includes the `truncated` flag and per-message attachment info (`file_name`, `file_size`, `file_type`) — parity with what JSON export already provided
-  - File attachments render as `### Attachment: name _(size, type)_`; pasted content (no `file_name`) keeps the legacy `### Pasted` label
-  - Adopted from upstream commit `318d4a7`; skipped the extension-rename-to-"Local" half (we use the "Beta" suffix convention for testing builds)
-
 ## Pending 🔄
 
 ### Critical Priority 🔴
@@ -303,3 +298,8 @@
   - v1.9.6: "Advanced Options" link added to the browse settings dropdown (between Time and Test connection) so the options page is reachable from the browse view
   - v1.9.7: backup/restore logic moved to shared `utils.js`; reachable from the browse dropdown via a "Backup/Restore Database" hover submenu. Date/Time format toggles moved out of the dropdown into the options page.
   - Future enhancement: smart per-key merge on restore (e.g. union `modelSnapshots`, keep earliest `firstSeen`) instead of overwrite
+
+- **Markdown export: truncated flag + attachment metadata** (v1.9.8)
+  - Markdown export now includes the `truncated` flag and per-message attachment info (`file_name`, `file_size`, `file_type`) — parity with what JSON export already provided
+  - File attachments render as `### Attachment: name _(size, type)_`; pasted content (no `file_name`) keeps the legacy `### Pasted` label
+  - Adopted from upstream commit `318d4a7`; skipped the extension-rename-to-"Local" half (we use the "Beta" suffix convention for testing builds)
