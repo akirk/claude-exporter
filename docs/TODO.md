@@ -1,4 +1,9 @@
 # Claude Exporter - TODO List
+- **Markdown export: truncated flag + attachment metadata** (v1.9.8)
+  - Markdown export now includes the `truncated` flag and per-message attachment info (`file_name`, `file_size`, `file_type`) — parity with what JSON export already provided
+  - File attachments render as `### Attachment: name _(size, type)_`; pasted content (no `file_name`) keeps the legacy `### Pasted` label
+  - Adopted from upstream commit `318d4a7`; skipped the extension-rename-to-"Local" half (we use the "Beta" suffix convention for testing builds)
+
 ## Pending 🔄
 
 ### Critical Priority 🔴

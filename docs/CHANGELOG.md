@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.9.8]
+
+- Markdown export now includes the `truncated` flag in the metadata block (when present in the conversation data)
+- Markdown export now shows file attachment metadata per message (`file_name`, `file_size`, `file_type`) — not just `extracted_content`. File attachments render as `### Attachment: <name> _(size, type)_`; pasted content keeps the legacy `### Pasted` label.
+
 ## [1.9.7]
 
 - Reorganized the browse settings dropdown: Date and Time format toggles moved to the options page; their slot now holds a "Backup/Restore Database" item with a hover submenu (Backup / Restore)

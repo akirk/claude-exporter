@@ -43,6 +43,9 @@ function convertToMarkdown(data, includeMetadata, conversationId = null, include
     if (conversationId) {
       markdown += `**Link:** [https://claude.ai/chat/${conversationId}](https://claude.ai/chat/${conversationId})\n`;
     }
+    if (data.truncated !== undefined) {
+      markdown += `**Truncated:** ${data.truncated}\n`;
+    }
     markdown += `\n---\n\n`;
   }
 
@@ -88,10 +91,30 @@ function convertToMarkdown(data, includeMetadata, conversationId = null, include
       }
     }
 
-    // Handle attachments (e.g., pasted content)
+    // Handle attachments (file uploads and pasted content)
     if (message.attachments && message.attachments.length > 0) {
       for (const attachment of message.attachments) {
-        if (attachment.extracted_content) {
+        if (attachment.file_name) {
+          // File attachment — show file metadata + extracted content if present
+          let header = `### Attachment: ${attachment.file_name}`;
+          const meta = [];
+          if (attachment.file_size) {
+            meta.push(`${(attachment.file_size / 1024).toFixed(1)} KB`);
+          }
+          if (attachment.file_type) {
+            meta.push(attachment.file_type);
+          }
+          if (meta.length > 0) {
+            header += ` _(${meta.join(', ')})_`;
+          }
+          markdown += `${header}\n`;
+          if (attachment.extracted_content) {
+            markdown += `\`\`\`\`\n${attachment.extracted_content}\n\`\`\`\`\n\n`;
+          } else {
+            markdown += `\n`;
+          }
+        } else if (attachment.extracted_content) {
+          // Pasted content (no file_name) — legacy label
           markdown += `### Pasted\n\`\`\`\`\n${attachment.extracted_content}\n\`\`\`\`\n\n`;
         }
       }
